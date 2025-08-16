@@ -1,3 +1,4 @@
+// src/server.ts
 import http from "http";
 import express from "express";
 import cors from "cors";
@@ -11,6 +12,8 @@ import messageRoutes from "./routes/message.routes";
 import roomRoutes from "./routes/room.routes";
 import privateMessageRoutes from "./routes/privateMessage.routes";
 import { PrivateMessage } from "./models/PrivateMessage";
+import userRoutes from "./routes/user.routes";
+import { User } from "./models/User";
 
 dotenv.config();
 
@@ -21,12 +24,14 @@ app.use(helmet());
 app.use(cors({ origin: process.env.CORS_ORIGIN?.split(",") || "*" }));
 app.use(express.json());
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 min
-  max: 100, // límite de requests
+// Rate limiting (solo auth; en dev queda desactivado)
+const authLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV !== "production",
 });
-app.use(limiter);
 
 // Endpoint de prueba
 app.get("/health", (_req, res) => {
@@ -34,10 +39,11 @@ app.get("/health", (_req, res) => {
 });
 
 // Rutas
-app.use("/auth", authRoutes);
+app.use("/auth", authLimiter, authRoutes);
 app.use("/messages", messageRoutes);
 app.use("/rooms", roomRoutes);
 app.use("/private-messages", privateMessageRoutes);
+app.use("/users", userRoutes);
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -47,60 +53,120 @@ const io = new Server(server, {
 // Guardar `io` en app para usar en controladores
 app.set("io", io);
 
-const connectedUsers = new Map<string, string>(); // userId -> socketId
+// userId -> socketId
+const connectedUsers = new Map<string, string>();
 
 io.on("connection", (socket) => {
-  console.log("Nuevo cliente conectado:", socket.id);
+  console.log("[SOCKET] connected:", socket.id);
 
-  socket.on("user_connected", async (userId) => {
-    connectedUsers.set(userId, socket.id);
-    socket.data.userId = userId;
-    io.emit("users_online", Array.from(connectedUsers.keys()));
+  // Usuario se conecta (desde el cliente emiten user_connected)
+  socket.on("user_connected", async (userId: string, ack?: Function) => {
+    try {
+      socket.data.userId = userId;
+      connectedUsers.set(userId, socket.id);
 
-    // 🔹 Buscar mensajes no leídos y enviarlos
-    const unreadMessages = await PrivateMessage.find({
-      to: userId,
-      read: false,
-    });
-    if (unreadMessages.length > 0) {
-      socket.emit("unread_messages", unreadMessages);
-
-      // Marcarlos como leídos
-      await PrivateMessage.updateMany(
-        { to: userId, read: false },
-        { $set: { read: true } }
+      const upd = await User.updateOne(
+        { _id: userId },
+        { $set: { isConnected: true } }
       );
+      console.log(
+        "[SOCKET] user_connected -> DB set true",
+        userId,
+        "matched:",
+        upd.matchedCount,
+        "modified:",
+        upd.modifiedCount
+      );
+
+      // Enviar lista de usuarios conectados (IDs)
+      io.emit("users_online", Array.from(connectedUsers.keys()));
+
+      // Mensajes no leídos
+      const unread = await PrivateMessage.find({ to: userId, read: false });
+      if (unread.length > 0) {
+        socket.emit("unread_messages", unread);
+        await PrivateMessage.updateMany(
+          { to: userId, read: false },
+          { $set: { read: true } }
+        );
+      }
+
+      if (typeof ack === "function") ack({ ok: true });
+    } catch (e) {
+      console.error("[SOCKET] user_connected error", e);
+      if (typeof ack === "function") ack({ ok: false });
     }
   });
 
-  // 🔹 Enviar mensaje privado
+  // Enviar mensaje privado
   socket.on("private_message", async ({ to, text }) => {
-    const from = socket.data.userId;
+    const from = socket.data.userId as string | undefined;
     if (!from) return;
 
-    // Guardar en la DB
-    const savedMessage = await PrivateMessage.create({ from, to, text });
+    const saved = await PrivateMessage.create({ from, to, text });
 
     const targetSocketId = connectedUsers.get(to);
     if (targetSocketId) {
-      // Si está online, se lo enviamos en tiempo real
-      io.to(targetSocketId).emit("private_message", savedMessage);
-
-      // Marcamos como leído
-      await PrivateMessage.findByIdAndUpdate(savedMessage._id, { read: true });
+      io.to(targetSocketId).emit("private_message", saved);
+      await PrivateMessage.findByIdAndUpdate(saved._id, { read: true });
     }
   });
 
-  // 🔹 Desconexión
-  socket.on("disconnect", () => {
-    for (const [userId, sId] of connectedUsers.entries()) {
-      if (sId === socket.id) {
-        connectedUsers.delete(userId);
-        break;
-      }
+  // Logout manual (desde botón)
+  socket.on("user_logout", async (userId: string, ack?: Function) => {
+    try {
+      connectedUsers.delete(userId);
+
+      const upd = await User.updateOne(
+        { _id: userId },
+        { $set: { isConnected: false } }
+      );
+      console.log(
+        "[SOCKET] user_logout -> DB set false",
+        userId,
+        "matched:",
+        upd.matchedCount,
+        "modified:",
+        upd.modifiedCount
+      );
+
+      io.emit("users_online", Array.from(connectedUsers.keys()));
+      io.emit("userDisconnected", userId);
+
+      if (typeof ack === "function") ack({ ok: true });
+
+      // opcional: cortar el socket del cliente que desloguea
+      // socket.disconnect(true);
+    } catch (e) {
+      console.error("[SOCKET] user_logout error", e);
+      if (typeof ack === "function") ack({ ok: false });
     }
-    io.emit("users_online", Array.from(connectedUsers.keys()));
-    console.log("Cliente desconectado:", socket.id);
+  });
+
+  // Desconexión (cierre pestaña, perder internet, etc.)
+  socket.on("disconnect", async (reason) => {
+    const userId = socket.data.userId as string | undefined;
+    console.log("[SOCKET] disconnect:", socket.id, "reason:", reason, "userId:", userId);
+
+    if (userId) {
+      connectedUsers.delete(userId);
+
+      const upd = await User.updateOne(
+        { _id: userId },
+        { $set: { isConnected: false } }
+      );
+      console.log(
+        "[SOCKET] disconnect -> DB set false",
+        userId,
+        "matched:",
+        upd.matchedCount,
+        "modified:",
+        upd.modifiedCount
+      );
+
+      io.emit("users_online", Array.from(connectedUsers.keys()));
+      io.emit("userDisconnected", userId);
+    }
   });
 });
 

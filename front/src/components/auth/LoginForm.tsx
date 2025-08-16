@@ -13,6 +13,11 @@ export default function LoginForm() {
 
     try {
       const data = await loginHelper(email, password);
+
+      // ✅ Guardamos en sessionStorage para que sea por pestaña
+      sessionStorage.setItem("token", data.token);
+      sessionStorage.setItem("user", JSON.stringify(data.user));
+
       Swal.fire({
         icon: "success",
         title: "Inicio de sesión exitoso",
@@ -20,6 +25,9 @@ export default function LoginForm() {
         confirmButtonColor: "#14b8a6",
         background: "#0f172a",
         color: "#fff",
+      }).then(() => {
+        // ✅ Redirigir a /chat después de aceptar
+        window.location.href = "/chat";
       });
     } catch (err) {
       Swal.fire({
@@ -44,7 +52,6 @@ export default function LoginForm() {
         Iniciar Sesión
       </h2>
 
-      {/* Email */}
       <input
         type="email"
         placeholder="Correo electrónico"
@@ -54,7 +61,6 @@ export default function LoginForm() {
         autoComplete="email"
       />
 
-      {/* Password */}
       <input
         type="password"
         placeholder="Contraseña"
@@ -64,7 +70,6 @@ export default function LoginForm() {
         autoComplete="current-password"
       />
 
-      {/* Botón */}
       <button
         type="submit"
         disabled={loading}
