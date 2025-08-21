@@ -99,16 +99,40 @@ io.on("connection", (socket) => {
   });
 
   // Enviar mensaje privado
-  socket.on("private_message", async ({ to, text }) => {
-    const from = socket.data.userId as string | undefined;
+  // Enviar mensaje privado
+  socket.on("private_message", async ({ to, text, clientId }) => {
+    const from = socket.data.userId as string;
     if (!from) return;
 
-    const saved = await PrivateMessage.create({ from, to, text });
+    try {
+      const saved = await PrivateMessage.create({ from, to, text });
 
-    const targetSocketId = connectedUsers.get(to);
-    if (targetSocketId) {
-      io.to(targetSocketId).emit("private_message", saved);
-      await PrivateMessage.findByIdAndUpdate(saved._id, { read: true });
+      const payload = { ...saved.toObject(), clientId };
+
+      // 🔎 Log para debug
+      console.log("[SOCKET] 📥 Nuevo mensaje guardado en DB:", {
+        _id: saved._id,
+        from: saved.from,
+        to: saved.to,
+        text: saved.text,
+        createdAt: saved.createdAt,
+      });
+
+      // enviar a destinatario
+      const targetSocketId = connectedUsers.get(to);
+      if (targetSocketId) {
+        io.to(targetSocketId).emit("private_message", payload);
+      }
+
+      // reenviar al remitente también
+      socket.emit("private_message", payload);
+
+      // marcar como leído si ya lo recibió
+      if (targetSocketId) {
+        await PrivateMessage.findByIdAndUpdate(saved._id, { read: true });
+      }
+    } catch (err) {
+      console.error("[SOCKET] ❌ Error guardando mensaje:", err);
     }
   });
 

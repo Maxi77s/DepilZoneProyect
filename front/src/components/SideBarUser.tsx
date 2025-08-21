@@ -3,6 +3,8 @@ import { io, Socket } from "socket.io-client";
 import type { IUser } from "../interfaces/user.interface";
 
 interface Props {
+  onLogout: () => void;
+  currentUser?: IUser;  // 👈 agregado
   users: IUser[];                      // carga inicial desde /users
   onSelectUser: (user: IUser) => void; // click en un usuario
 }

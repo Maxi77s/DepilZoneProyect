@@ -1,5 +1,7 @@
 {
   "compilerOptions": {
+    "types": ["node","express"],
+    "typeRoots": ["./src/types", "./node_modules/@types"],
     "target": "ES2020",
     "module": "CommonJS",
     "moduleResolution": "node",

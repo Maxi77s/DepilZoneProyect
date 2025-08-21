@@ -10,3 +10,8 @@ export const login = (email: string, password: string) =>
 // ✅ Nuevo: obtener todos los usuarios
 export const getUsers = () =>
   api.get("/users"); // el api ya tiene el baseURL de tu backend
+
+
+// src/services/auth.service.ts
+export const getPrivateMessages = (userId: string) =>
+  api.get(`/private-messages/${userId}`);

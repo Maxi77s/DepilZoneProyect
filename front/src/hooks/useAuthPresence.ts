@@ -1,3 +1,4 @@
+// src/hooks/useAuthPresence.ts
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../services/api";
 import { socket, connectSocket, disconnectSocket } from "../services/socket";
@@ -14,16 +15,30 @@ function isTokenExpired(token: string | null): boolean {
 }
 
 export function useAuthPresence() {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem("token"));
+  const [token, setToken] = useState<string | null>(() =>
+    localStorage.getItem("token")
+  );
+
   const user = useMemo(() => {
     try {
       const raw = localStorage.getItem("user");
-      return raw ? JSON.parse(raw) : null;
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (!parsed) return null;
+
+      // 🔑 normalizamos: si viene con "id", lo copiamos a "_id"
+      if (parsed.id && !parsed._id) {
+        parsed._id = parsed.id;
+      }
+
+      return parsed;
     } catch {
       return null;
     }
   }, []);
-  const userId: string | undefined = user?._id ?? user?.id;
+
+  // ⚠️ usar siempre _id (el de Mongo)
+  const userId: string | undefined = user?._id;
+
   const markedRef = useRef(false);
 
   // marca offline en backend + socket
@@ -32,14 +47,21 @@ export function useAuthPresence() {
     markedRef.current = true;
 
     try {
-      // avisa al backend (pone isConnected=false)
-      try { await api.post("/auth/logout"); } catch { /* ignora si falla */ }
+      try {
+        await api.post("/auth/logout");
+      } catch {
+        /* ignora si falla */
+      }
 
-      // emite presencia por socket
       try {
         connectSocket();
-        if (userId) socket.emit("presence:offline", { userId });
-      } catch { /* ignora */ }
+        if (userId) {
+          socket.emit("presence:offline", { userId });
+          console.log("[AuthPresence] 🔴 marcando offline:", userId);
+        }
+      } catch {
+        console.log("[AuthPresence] ⚠️ error al emitir offline");
+      }
     } finally {
       disconnectSocket();
       localStorage.removeItem("token");
@@ -48,18 +70,21 @@ export function useAuthPresence() {
   };
 
   useEffect(() => {
-    // Si hay token válido, conectamos socket y avisamos online
+    console.log("[AuthPresence] user desde localStorage:", user);
+    console.log("[AuthPresence] userId normalizado:", userId);
+
     if (token && !isTokenExpired(token)) {
       connectSocket();
-      if (userId) socket.emit("presence:online", { userId });
+      if (userId) {
+        console.log("[AuthPresence] 🟢 conectando usuario:", userId);
+        socket.emit("presence:online", { userId });
+      }
     } else {
-      // sin token válido => offline
       void markOffline();
     }
 
-    // Interceptor global 401 -> offline
     const resInterceptor = api.interceptors.response.use(
-      r => r,
+      (r) => r,
       async (error) => {
         if (error?.response?.status === 401) {
           await markOffline();
@@ -68,13 +93,11 @@ export function useAuthPresence() {
       }
     );
 
-    // Si token se borra en otra pestaña -> offline
     const onStorage = async (e: StorageEvent) => {
       if (e.key === "token" && !e.newValue) await markOffline();
     };
     window.addEventListener("storage", onStorage);
 
-    // Heartbeat simple para expiración
     const hb = setInterval(async () => {
       const t = localStorage.getItem("token");
       if (!t || isTokenExpired(t)) await markOffline();
@@ -86,7 +109,7 @@ export function useAuthPresence() {
       clearInterval(hb);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [token, userId]);
 
   return { token, user, userId, markOffline };
 }
