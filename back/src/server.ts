@@ -98,7 +98,17 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Enviar mensaje privado
+  // Enviar mensaje Rooms
+  socket.on("join_room", (roomId) => {
+    socket.join(roomId);
+    console.log(`[SOCKET] ${socket.id} se unió a sala ${roomId}`);
+  });
+
+  socket.on("leave_room", (roomId) => {
+    socket.leave(roomId);
+    console.log(`[SOCKET] ${socket.id} salió de sala ${roomId}`);
+  });
+
   // Enviar mensaje privado
   socket.on("private_message", async ({ to, text, clientId }) => {
     const from = socket.data.userId as string;
@@ -170,7 +180,14 @@ io.on("connection", (socket) => {
   // Desconexión (cierre pestaña, perder internet, etc.)
   socket.on("disconnect", async (reason) => {
     const userId = socket.data.userId as string | undefined;
-    console.log("[SOCKET] disconnect:", socket.id, "reason:", reason, "userId:", userId);
+    console.log(
+      "[SOCKET] disconnect:",
+      socket.id,
+      "reason:",
+      reason,
+      "userId:",
+      userId
+    );
 
     if (userId) {
       connectedUsers.delete(userId);

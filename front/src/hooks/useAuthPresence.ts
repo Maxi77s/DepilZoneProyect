@@ -57,7 +57,7 @@ export function useAuthPresence() {
         connectSocket();
         if (userId) {
           socket.emit("presence:offline", { userId });
-          console.log("[AuthPresence] 🔴 marcando offline:", userId);
+          
         }
       } catch {
         console.log("[AuthPresence] ⚠️ error al emitir offline");
@@ -70,13 +70,10 @@ export function useAuthPresence() {
   };
 
   useEffect(() => {
-    console.log("[AuthPresence] user desde localStorage:", user);
-    console.log("[AuthPresence] userId normalizado:", userId);
 
     if (token && !isTokenExpired(token)) {
       connectSocket();
       if (userId) {
-        console.log("[AuthPresence] 🟢 conectando usuario:", userId);
         socket.emit("presence:online", { userId });
       }
     } else {

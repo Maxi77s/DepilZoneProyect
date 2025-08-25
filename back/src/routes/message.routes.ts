@@ -4,6 +4,23 @@ import { Message } from "../models/Message";
 
 const router = Router();
 
+// 📌 Obtener historial de mensajes de una sala
+router.get("/:roomId", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { roomId } = req.params;
+
+    const messages = await Message.find({ room: roomId })
+      .populate("sender", "name email") // opcional, para mostrar datos del usuario
+      .sort({ createdAt: 1 });
+
+    res.json(messages);
+  } catch (error) {
+    console.error("[API] Error al obtener mensajes de sala:", error);
+    res.status(500).json({ message: "Error al obtener historial de la sala" });
+  }
+});
+
+// 📌 Enviar un mensaje a una sala
 router.post("/:roomId", requireAuth, async (req: Request, res: Response) => {
   try {
     const { text } = req.body;
@@ -27,6 +44,7 @@ router.post("/:roomId", requireAuth, async (req: Request, res: Response) => {
 
     res.status(201).json(message);
   } catch (error) {
+    console.error("[API] Error al enviar mensaje de sala:", error);
     res.status(500).json({ message: "Error al enviar mensaje de sala", error });
   }
 });

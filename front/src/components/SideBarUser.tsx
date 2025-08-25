@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import type { IUser } from "../interfaces/user.interface";
-import { Menu, X, User, LogOut } from "lucide-react";
+import { Menu, X, User, LogOut, PlusCircle, Users } from "lucide-react";
+import { getUserRooms } from "../services/auth.service";
+import CreateRoomModal from "../components/modal/CreateRoomModal";
 
 interface Props {
   onLogout: () => void;
   currentUser?: IUser;
   users: IUser[];
-  onSelectUser: (user: IUser) => void;
+  onSelectUser: (target: { _id: string; name: string; type: "user" | "room" }) => void;
 }
 
 let socket: Socket | null = null;
@@ -19,14 +21,18 @@ function toMap(list: IUser[]): Record<string, IUser> {
 }
 
 export default function SideBarUser({ users, onSelectUser }: Props) {
-  const currentUser = sessionStorage.getItem("user")
+  const currentUser: IUser | null = sessionStorage.getItem("user")
     ? JSON.parse(sessionStorage.getItem("user") as string)
     : null;
 
   const [byId, setById] = useState<Record<string, IUser>>(() => toMap(users));
-  const [isOpen, setIsOpen] = useState(true); // 👈 también en desktop
 
-  // merge users
+  // 👉 arranca cerrado en mobile (<768px), abierto en desktop
+  const [isOpen, setIsOpen] = useState(() => window.innerWidth >= 768);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [rooms, setRooms] = useState<{ _id: string; name: string }[]>([]);
+
+  // merge users con estado conectado
   useEffect(() => {
     setById((prev) => {
       const merged = { ...prev };
@@ -40,10 +46,9 @@ export default function SideBarUser({ users, onSelectUser }: Props) {
     });
   }, [users]);
 
-  // socket listeners
+  // sockets
   useEffect(() => {
     if (!currentUser) return;
-
     if (!socket) {
       const BASE =
         (import.meta.env as ImportMetaEnv).VITE_SOCKET_URL ||
@@ -51,11 +56,9 @@ export default function SideBarUser({ users, onSelectUser }: Props) {
         "http://localhost:8080";
       socket = io(BASE, { transports: ["websocket"] });
     }
-
     const onConnect = () => {
       socket!.emit("user_connected", currentUser._id, () => {});
     };
-
     const onUsersOnline = (onlineIds: string[]) => {
       const onlineSet = new Set(onlineIds);
       setById((prev) => {
@@ -66,7 +69,6 @@ export default function SideBarUser({ users, onSelectUser }: Props) {
         return next;
       });
     };
-
     const onUserDisconnected = (userId: string) => {
       setById((prev) =>
         prev[userId]
@@ -74,11 +76,9 @@ export default function SideBarUser({ users, onSelectUser }: Props) {
           : prev
       );
     };
-
     socket.on("connect", onConnect);
     socket.on("users_online", onUsersOnline);
     socket.on("userDisconnected", onUserDisconnected);
-
     return () => {
       socket?.off("connect", onConnect);
       socket?.off("users_online", onUsersOnline);
@@ -86,28 +86,18 @@ export default function SideBarUser({ users, onSelectUser }: Props) {
     };
   }, [currentUser]);
 
+  // cargar salas del user
+  useEffect(() => {
+    if (!currentUser) return;
+    getUserRooms()
+      .then((res) => setRooms(res.data))
+      .catch(() => {});
+  }, [currentUser]);
+
   const handleLogout = async () => {
-    try {
-      if (currentUser && socket?.connected) {
-        await new Promise<void>((resolve) => {
-          socket!.emit("user_logout", currentUser._id, () => resolve());
-          setTimeout(resolve, 500);
-        });
-      } else if (currentUser?._id) {
-        await fetch(
-          `${(import.meta.env as ImportMetaEnv).VITE_API_URL}/auth/logout`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userId: currentUser._id }),
-          }
-        ).catch(() => {});
-      }
-    } finally {
-      sessionStorage.removeItem("token");
-      sessionStorage.removeItem("user");
-      window.location.href = "/";
-    }
+    sessionStorage.removeItem("token");
+    sessionStorage.removeItem("user");
+    window.location.href = "/";
   };
 
   const allUsers = useMemo(() => Object.values(byId), [byId]);
@@ -118,43 +108,25 @@ export default function SideBarUser({ users, onSelectUser }: Props) {
 
   return (
     <>
-      {/* Header en mobile */}
-      <div className="md:hidden flex items-center justify-between bg-gray-900 p-4 border-b border-gray-800">
-        <button className="text-white" onClick={() => setIsOpen(!isOpen)}>
-          {isOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
-        <span className="text-white font-semibold">Chat</span>
-        <div />
-      </div>
-
+      {/* Sidebar */}
       <aside
-        className={`fixed md:static top-0 left-0 h-full ${
-          isOpen ? "w-64" : "w-20"
-        } bg-gray-900 border-r border-gray-800 flex flex-col transform transition-all duration-300 z-40`}
+        className={`h-full flex-shrink-0
+          ${isOpen ? "w-64" : "w-20"}
+          bg-gray-900 border-r border-gray-800 flex flex-col transition-all`}
       >
-        {/* Toggle arriba de todo */}
-        <div className="flex justify-end p-3 border-b border-gray-700">
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="text-gray-300 hover:text-white"
-          >
-            {isOpen ? <X size={22} /> : <Menu size={22} />}
+        {/* Header con botón hamburguesa */}
+        <div className="p-4 border-b border-gray-700 flex items-center justify-between">
+          <button className="text-white" onClick={() => setIsOpen(!isOpen)}>
+            {isOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
+          {isOpen && <span className="text-white font-semibold">Menú</span>}
         </div>
 
-        {/* Usuario + logout */}
+        {/* Usuario conectado + acciones */}
         <div className="p-4 border-b border-gray-700 flex flex-col gap-3">
           {currentUser && (
-            <div
-              className={`flex items-center gap-2 bg-gray-800 px-3 py-2 rounded-lg transition-all duration-300 ${
-                !isOpen ? "justify-center w-full" : ""
-              }`}
-            >
-              <span
-                className={`text-white font-semibold truncate ${
-                  !isOpen ? "hidden" : "block max-w-[9rem]"
-                }`}
-              >
+            <div className="flex items-center gap-2 bg-gray-800 px-3 py-2 rounded-lg">
+              <span className="text-white font-semibold truncate">
                 {currentUser.name}
               </span>
               <span
@@ -166,40 +138,44 @@ export default function SideBarUser({ users, onSelectUser }: Props) {
           )}
 
           {isOpen && (
-            <button
-              onClick={handleLogout}
-              className="text-sm bg-red-600 hover:bg-red-500 px-2 py-1 rounded text-white flex items-center gap-1 justify-center"
-            >
-              <LogOut size={14} /> Logout
-            </button>
+            <>
+              <button
+                onClick={handleLogout}
+                className="text-sm bg-red-600 hover:bg-red-500 px-2 py-1 rounded text-white flex items-center gap-1 justify-center"
+              >
+                <LogOut size={14} /> Logout
+              </button>
+
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="flex items-center gap-1 px-2 py-1 bg-teal-600 hover:bg-teal-500 rounded-lg text-sm"
+              >
+                <PlusCircle size={16} /> Sala
+              </button>
+            </>
           )}
         </div>
 
-        {/* Lista de usuarios */}
-        <div className="flex-1 overflow-y-auto p-4">
-          {otherUsers.length === 0 ? (
-            <p className="text-gray-500">{isOpen ? "No hay usuarios" : ""}</p>
-          ) : (
+        {/* Listas */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+          {/* Usuarios */}
+          <div>
+            {isOpen && (
+              <h1 className="text-lg font-semibold text-white mb-2">Usuarios</h1>
+            )}
             <ul className="space-y-2">
-              {isOpen && (
-                <h1 className="text-lg font-semibold text-white mb-2">
-                  Usuarios
-                </h1>
-              )}
               {otherUsers.map((user) => (
                 <li
                   key={user._id}
                   onClick={() => {
-                    onSelectUser(user);
-                    setIsOpen(false);
+                    onSelectUser({ ...user, type: "user" as const });
+                    setIsOpen(false); // 👈 cerrar en mobile
                   }}
                   className="flex items-center gap-2 p-2 hover:bg-gray-800 rounded-lg cursor-pointer"
                 >
                   <User size={18} className="text-gray-400" />
                   {isOpen && (
-                    <span className="text-white truncate max-w-[11rem]">
-                      {user.name}
-                    </span>
+                    <span className="text-white truncate">{user.name}</span>
                   )}
                   <span
                     className={`w-3 h-3 rounded-full ml-auto ${
@@ -209,9 +185,43 @@ export default function SideBarUser({ users, onSelectUser }: Props) {
                 </li>
               ))}
             </ul>
-          )}
+          </div>
+
+          {/* Salas */}
+          <div>
+            {isOpen && (
+              <h1 className="text-lg font-semibold text-white mb-2">Salas</h1>
+            )}
+            <ul className="space-y-2">
+              {rooms.map((room) => (
+                <li
+                  key={room._id}
+                  onClick={() => {
+                    onSelectUser({ ...room, type: "room" as const });
+                    setIsOpen(false); // 👈 cerrar en mobile
+                  }}
+                  className="flex items-center gap-2 p-2 hover:bg-gray-800 rounded-lg cursor-pointer"
+                >
+                  <Users size={18} className="text-gray-400" />
+                  {isOpen && (
+                    <span className="text-white truncate">{room.name}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </aside>
+
+      {/* Modal crear sala */}
+      {currentUser && (
+        <CreateRoomModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          currentUser={currentUser}
+          onRoomCreated={(room) => setRooms((prev) => [...prev, room])}
+        />
+      )}
     </>
   );
 }
