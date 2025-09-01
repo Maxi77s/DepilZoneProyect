@@ -1,13 +1,15 @@
 // src/components/ChatRooms/ChatMessagesRoom.tsx
 import { useEffect, useRef } from "react";
 import type { IRoomMessage } from "./useRoomChatLogic";
+import type { IUser } from "../../interfaces/user.interface";
 
 type Props = {
   myId: string | undefined;
   visibleMessages: IRoomMessage[];
+  users: IUser[]; 
 };
 
-export default function ChatMessagesRoom({ visibleMessages }: Props) {
+export default function ChatMessagesRoom({ visibleMessages, users }: Props) {
   const sessionUser = sessionStorage.getItem("user");
   const myId: string | undefined = sessionUser
     ? JSON.parse(sessionUser)._id
@@ -31,6 +33,12 @@ export default function ChatMessagesRoom({ visibleMessages }: Props) {
       return "";
     }
   };
+  // +++ AÑADIR (debajo de formatDate)
+  const findUserName = (id?: string) => {
+    if (!id) return "Usuario";
+    const u = users.find((usr) => String(usr._id) === String(id));
+    return u?.name || "Usuario";
+  };
 
   return (
     <div className="flex flex-col gap-3 p-4 overflow-y-auto h-full">
@@ -38,8 +46,9 @@ export default function ChatMessagesRoom({ visibleMessages }: Props) {
         // 🔹 el sender puede venir como string o como objeto poblado
         const from =
           typeof m.sender === "string"
-            ? { _id: m.sender, name: "Usuario" }
-            : m.sender;
+            ? { _id: m.sender, name: findUserName(m.sender) }
+            : { _id: m.sender?._id, name: m.sender?.name || findUserName(String(m.sender?._id)) };
+
 
         const isMine =
           myId !== undefined &&

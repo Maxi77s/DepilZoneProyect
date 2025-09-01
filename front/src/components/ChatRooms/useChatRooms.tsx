@@ -2,7 +2,7 @@
 import { Dialog } from "@headlessui/react";
 import { X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { getUsers, createRoom } from "../../services/auth.service"; // usa el mismo path que ya tenías
+import { getUsers, createRoom } from "../../services/auth.service"; 
 import type { IUser } from "../../interfaces/user.interface";
 
 type Props = {
@@ -17,7 +17,7 @@ export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Prop
   const [roomName, setRoomName] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Lee el usuario logueado desde sessionStorage (tal cual lo guardas)
+  // Lee el usuario logueado desde sessionStorage 
   let currentUser: IUser | null = null;
   try {
     const raw = sessionStorage.getItem("user");

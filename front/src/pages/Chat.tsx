@@ -92,74 +92,74 @@ export default function Chat() {
     [users, myId]
   );
 
-  return (
-    <div className="flex h-screen bg-gray-950 text-white">
-      {/* Sidebar de usuarios y salas */}
-      <SideBarUser
-        users={usersWithoutMe}
-        onSelectUser={(target: Target) => {
-          if (target.type === "user") {
-            setSelectedUser(target);
-            setSelectedRoom(null);
-          } else {
-            setSelectedRoom(target);
-            setSelectedUser(null);
-          }
-        }}
-        onLogout={async () => {
-          await markOffline();
-          window.location.href = "/";
-        }}
-      />
+return (
+  <div className="flex h-screen bg-gray-950 text-white overflow-hidden">
+    {/* Sidebar de usuarios y salas */}
+    <SideBarUser
+      users={usersWithoutMe}
+      onSelectUser={(target: Target) => {
+        if (target.type === "user") {
+          setSelectedUser(target);
+          setSelectedRoom(null);
+        } else {
+          setSelectedRoom(target);
+          setSelectedUser(null);
+        }
+      }}
+      onLogout={async () => {
+        await markOffline();
+        window.location.href = "/";
+      }}
+    />
 
-      {/* Área principal de chat */}
-      <div className="flex flex-col flex-1">
-        {/* Header dinámico */}
-        {selectedUser && (
-          <ChatHeader
-            selectedUser={selectedUser}
-            loadingUsers={loadingUsers}
-            usersError={usersError}
-          />
-        )}
-        {selectedRoom && (
-          <ChatRoomHeader
-            roomName={selectedRoom.name}
-            participants={selectedRoom.participants || []}
-          />
-        )}
+    {/* Área principal de chat */}
+    <div className="flex flex-col flex-1 min-w-0">
+      {/* Header dinámico */}
+      {selectedUser && (
+        <ChatHeader
+          selectedUser={selectedUser}
+          loadingUsers={loadingUsers}
+          usersError={usersError}
+        />
+      )}
+      {selectedRoom && (
+        <ChatRoomHeader
+          roomName={selectedRoom.name}
+          participants={selectedRoom.participants || []}
+        />
+      )}
 
-        {/* Mensajes */}
-        <main className="flex-1 flex flex-col p-4 space-y-2 overflow-y-auto">
-          {!selectedUser && !selectedRoom ? (
-            <p className="text-gray-400">No hay chat seleccionado.</p>
-          ) : selectedUser ? (
-            <ChatMessages myId={myId} visibleMessages={visibleMessages} />
-          ) : (
-            selectedRoom && (
-              <ChatMessagesRoom myId={myId} visibleMessages={roomMessages} />
-            )
-          )}
-        </main>
+      {/* Mensajes */}
+      <main className="flex-1 flex flex-col p-4 space-y-2 overflow-y-auto">
+        {!selectedUser && !selectedRoom ? (
+          <p className="text-gray-400">No hay chat seleccionado.</p>
+        ) : selectedUser ? (
+          <ChatMessages myId={myId} visibleMessages={visibleMessages} />
+        ) : (
+          selectedRoom && (
+            <ChatMessagesRoom myId={myId} visibleMessages={roomMessages}  users={users || []} />
+          )
+        )}
+      </main>
 
-        {/* Input correcto según el tipo */}
-        {selectedUser && (
-          <ChatInput
-            draft={draft}
-            setDraft={setDraft}
-            sendMessage={sendMessage}
-            placeholder={`Mensaje para ${selectedUser.name}…`}
-          />
-        )}
-        {selectedRoom && (
-          <ChatInput
-            draft={roomDraft}
-            setDraft={setRoomDraft}
-            sendMessage={sendRoomMessage}
-            placeholder={`Mensaje en sala ${selectedRoom.name}…`}
-          />
-        )}
-      </div>
+      {/* Input correcto según el tipo */}
+      {selectedUser && (
+        <ChatInput
+          draft={draft}
+          setDraft={setDraft}
+          sendMessage={sendMessage}
+          placeholder={`Mensaje para ${selectedUser.name}…`}
+        />
+      )}
+      {selectedRoom && (
+        <ChatInput
+          draft={roomDraft}
+          setDraft={setRoomDraft}
+          sendMessage={sendRoomMessage}
+          placeholder={`Mensaje en sala ${selectedRoom.name}…`}
+        />
+      )}
     </div>
-  );
+  </div>
+);
 }
