@@ -35,16 +35,14 @@ export function useChatLogic() {
     const s = connectSocket();
     socketRef.current = s;
 
-   
-
     s.emit("user_connected", myId, (ack: { ok: boolean }) => {
       if (ack.ok) {
-        console.log("[chat] ✅ ACK de user_connected:", ack);
+        // console.log("[chat] ✅ ACK de user_connected:", ack);
       }
     });
 
     const handleIncoming = (msg: IPrivateMessage & { clientId?: string }) => {
-      console.log("[chat] 📩 EVENTO private_message recibido en frontend:", msg);
+      // console.log("[chat] 📩 EVENTO private_message recibido en frontend:", msg);
 
       setMessages((prev) => {
         // Reemplazo de mensaje optimista
@@ -78,21 +76,17 @@ export function useChatLogic() {
   // ────────────────────────────────
   useEffect(() => {
     if (!myId || !selectedUser) return;
-    console.log("[chat] 📜 pidiendo historial con", selectedUser._id);
+    // console.log("[chat] 📜 pidiendo historial con", selectedUser._id);
 
     getPrivateMessages(selectedUser._id)
       .then((res) => {
         const data: IPrivateMessage[] = res.data;
-        console.log(
-          "[chat] ✅ historial recibido del backend:",
-          data.length,
-          "mensajes"
-        );
+        // console.log("[chat] ✅ historial recibido del backend:", data.length, "mensajes");
         setMessages(sortByDate(data));
       })
-      .catch((err: unknown) =>
-        console.error("[chat] history error:", err)
-      );
+      .catch(() => {
+        // console.error("[chat] history error:", err);
+      });
   }, [myId, selectedUser]);
 
   // ────────────────────────────────
@@ -118,7 +112,7 @@ export function useChatLogic() {
         updatedAt: now,
       };
 
-      console.log("[chat] ✉️ enviando optimista al socket:", optimistic);
+      // console.log("[chat] ✉️ enviando optimista al socket:", optimistic);
 
       setMessages((prev) => sortByDate([...prev, optimistic]));
 
@@ -149,7 +143,7 @@ export function useChatLogic() {
       })
     : [];
 
-  console.log("[chat] 💬 visibleMessages renderizados:", visibleMessages);
+  // console.log("[chat] 💬 visibleMessages renderizados:", visibleMessages);
 
   return {
     draft,
