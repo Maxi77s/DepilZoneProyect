@@ -23,7 +23,8 @@ const app = express();
 app.use(helmet());
 app.use(cors({ origin: process.env.CORS_ORIGIN?.split(",") || "*" }));
 app.use(express.json());
-
+app.set("trust proxy", 1); // si estás detrás de un proxy (ej. Heroku, Vercel, Nginx)
+app.use(helmet());
 // Rate limiting (solo auth; en dev queda desactivado)
 const authLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -49,6 +50,8 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: process.env.CORS_ORIGIN?.split(",") || "*" },
 });
+
+
 
 // Guardar `io` en app para usar en controladores
 app.set("io", io);
