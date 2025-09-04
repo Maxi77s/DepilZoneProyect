@@ -7,6 +7,103 @@ Chat en tiempo real con **usuarios**, **salas**, **mensajes privados** y **prese
 
 ---
 
+## 🧭 Tutorial: levantar el proyecto localmente (paso a paso)
+
+### 0) Requisitos
+- **Node.js 18+**
+- **MongoDB** (Atlas o local). Si usás Atlas, asegurate de **permitir tu IP** en Network Access.
+- Puertos libres: **4000** (backend) y **5173** (frontend).
+
+### 1) Clonar el repositorio
+```bash
+git clone https://github.com/Maxi77s/DepilZone
+cd DepilZone
+```
+
+### 2) Configurar variables de entorno
+Creá los archivos `.env` según se indica abajo (podés copiar/pegar este contenido y ajustar valores):
+
+**`back/.env`**
+```
+PORT=4000
+MONGO_URI=mongodb+srv://<USER>:<PASS>@<CLUSTER>/depilzone?retryWrites=true&w=majority
+JWT_SECRET=<your_secret>
+CORS_ORIGIN=http://localhost:5173
+```
+
+**`front/.env`**
+```
+VITE_API_URL=http://localhost:4000
+```
+
+> Para producción, los valores típicos son:  
+> `VITE_API_URL=https://depilzoneproyect.onrender.com`  
+> `CORS_ORIGIN=https://depil-zone-proyect.vercel.app`
+
+### 3) Instalar y levantar el **Backend**
+```bash
+cd back
+npm install
+npm run dev
+# Servidor en http://localhost:4000
+```
+
+### 4) Instalar y levantar el **Frontend**
+En otra terminal:
+```bash
+cd front
+npm install
+npm run dev
+# App en http://localhost:5173
+```
+
+### 5) (Opcional) Cargar datos de prueba — *seed manual* vía API
+Podés crear **2 usuarios**, **1 sala** y **mensajes** usando `curl`. Si tenés `jq`, los tokens/IDs se guardan automáticamente.
+
+```bash
+# Base
+API=http://localhost:4000
+
+# 5.1 Registrar usuarios demo
+curl -s -X POST "$API/auth/register" -H "Content-Type: application/json"   -d '{"name":"Admin Demo","email":"admin@demo.com","password":"admin123"}'
+
+curl -s -X POST "$API/auth/register" -H "Content-Type: application/json"   -d '{"name":"Usuario Demo","email":"user@demo.com","password":"user123"}'
+
+# 5.2 Login y guardar tokens (requiere jq)
+ADMIN_TOKEN=$(curl -s -X POST "$API/auth/login" -H "Content-Type: application/json"   -d '{"email":"admin@demo.com","password":"admin123"}' | jq -r '.token')
+
+USER_TOKEN=$(curl -s -X POST "$API/auth/login" -H "Content-Type: application/json"   -d '{"email":"user@demo.com","password":"user123"}' | jq -r '.token')
+
+# 5.3 Obtener IDs de usuario
+ADMIN_ID=$(curl -s -H "Authorization: Bearer $ADMIN_TOKEN" "$API/auth/me" | jq -r '.user._id')
+USER_ID=$(curl -s -H "Authorization: Bearer $USER_TOKEN" "$API/auth/me" | jq -r '.user._id')
+
+# 5.4 Crear sala con ambos participantes
+ROOM_ID=$(curl -s -X POST "$API/rooms"   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json"   -d "{"name":"Equipo Demo","participants":["$ADMIN_ID","$USER_ID"]}" | jq -r '._id')
+
+# 5.5 Mensajes de prueba (sala y privado)
+curl -s -X POST "$API/rooms/$ROOM_ID/messages"   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json"   -d '{"text":"Bienvenidos a la sala demo 👋"}' > /dev/null
+
+curl -s -X POST "$API/rooms/$ROOM_ID/messages"   -H "Authorization: Bearer $USER_TOKEN" -H "Content-Type: application/json"   -d '{"text":"Hola! Probando el chat en tiempo real."}' > /dev/null
+
+curl -s -X POST "$API/private"   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json"   -d "{"to":"$USER_ID","text":"Mensaje privado de prueba."}" > /dev/null
+```
+
+> **Sin `jq`**: podés hacer lo mismo con **Postman/Thunder Client**:  
+> 1) `POST /auth/register` (x2).  
+> 2) `POST /auth/login` (x2) y copiá los **token**.  
+> 3) `GET /auth/me` (x2) para obtener cada **_id**.  
+> 4) `POST /rooms` con `name` y `participants` (ambos IDs).  
+> 5) `POST /rooms/:id/messages` y `POST /private` para enviar mensajes.
+
+### 6) Notas y solución de problemas
+- **CORS**: si el front corre en `http://localhost:5173`, asegurate de tener `CORS_ORIGIN=http://localhost:5173` en el `.env` del back.  
+- **MongoDB Atlas**: añadí tu IP en *Network Access* y verificá usuario/clave/cluster del `MONGO_URI`.  
+- **Versión de Node**: usar **Node 18+**.  
+- **Salud del servidor**: `GET http://localhost:4000/health` debería responder **200**.
+
+---
+
 ## 📛 Badges
 
 ![Status](https://img.shields.io/badge/status-active-success.svg)
