@@ -15,7 +15,7 @@ import { PrivateMessage } from "./models/PrivateMessage";
 import userRoutes from "./routes/user.routes";
 import { User } from "./models/User";
 import WaRouter from "./integration/whatsapp.router";
-import { logWhatsAppBootInfo } from "./integrations/whatsapp/wa.boot";
+import { logWhatsAppBootInfo } from "./integration/wa.boot";
 dotenv.config();
 
 const app = express();
