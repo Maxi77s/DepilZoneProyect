@@ -8,18 +8,29 @@ const GRAPH_BASE = "https://graph.facebook.com/v23.0";
 const WA_DEBUG = true;
 
 /**
- * Devuelve el número exactamente como lo pide el webhook (solo dígitos, sin '+').
- * Si ya viene del webhook (ej: "5493585047802") lo retorna igual.
+ * Normaliza un número al formato E.164 **sin el '+' inicial**
+ * - Limpia caracteres no numéricos
+ * - Si detecta que empieza con "549" (ej: Argentina móvil),
+ *   lo convierte en "54" + resto (quita el 9).
  */
 function normalizeE164(n: string) {
   const raw = n ?? "";
-  const normalized = raw.replace(/[^\d]/g, ""); // asegura solo dígitos
+  let normalized = raw.replace(/[^\d]/g, ""); // asegura solo dígitos
+
+  if (normalized.startsWith("549") && normalized.length > 11) {
+    normalized = "54" + normalized.slice(3);
+  }
 
   if (WA_DEBUG) {
     console.log("[WA] normalizeE164:", { raw, normalized });
   }
 
   return normalized;
+}
+
+function isRecipientNotAllowed(e: any) {
+  const code = e?.response?.data?.error?.code;
+  return code === 131030;
 }
 
 export async function waSendText(to: string, body: string) {
@@ -29,7 +40,7 @@ export async function waSendText(to: string, body: string) {
 
   const payload = {
     messaging_product: "whatsapp",
-    to: toNormalized, // 👈 exactamente como lo manda el webhook
+    to: toNormalized,
     type: "text",
     text: { body },
   };
@@ -60,6 +71,17 @@ export async function waSendText(to: string, body: string) {
     const data = e?.response?.data;
 
     console.error("[WA] send error:", status, data || e?.message);
+    if (isRecipientNotAllowed(e)) {
+      console.error(
+        "[WA] 131030: El destino no está en la whitelist del PHONE_NUMBER_ID.",
+        {
+          phoneNumberId: env.PHONE_NUMBER_ID,
+          toRaw,
+          toNormalized,
+          hint: "Agregá este número EXACTO a la lista de destinatarios de prueba.",
+        }
+      );
+    }
     console.error("[WA] context:", {
       toRaw,
       toNormalized,
@@ -78,7 +100,7 @@ export async function waSendTemplate(to: string, name: string, lang = "es") {
 
   const payload = {
     messaging_product: "whatsapp",
-    to: toNormalized, // 👈 mismo formato que webhook
+    to: toNormalized,
     type: "template",
     template: { name, language: { code: lang } },
   };
@@ -109,6 +131,17 @@ export async function waSendTemplate(to: string, name: string, lang = "es") {
     const data = e?.response?.data;
 
     console.error("[WA] template error:", status, data || e?.message);
+    if (isRecipientNotAllowed(e)) {
+      console.error(
+        "[WA] 131030: El destino no está en la whitelist del PHONE_NUMBER_ID.",
+        {
+          phoneNumberId: env.PHONE_NUMBER_ID,
+          toRaw,
+          toNormalized,
+          hint: "Agregá este número EXACTO a la lista de destinatarios de prueba.",
+        }
+      );
+    }
     console.error("[WA] context:", {
       toRaw,
       toNormalized,
