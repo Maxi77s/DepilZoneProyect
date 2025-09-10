@@ -4,18 +4,16 @@ import { env } from "../config/env";
 
 const GRAPH_BASE = "https://graph.facebook.com/v23.0";
 
-// Poné esto en true si querés más verbosidad
+// Debug activado
 const WA_DEBUG = true;
 
 /**
- * Normaliza un número al formato E.164 **sin el '+' inicial**
- * - Limpia caracteres no numéricos
- * - NO agrega "9" por defecto
- * - Usa exactamente los dígitos que le pases (ej: 543585047802)
+ * Devuelve el número exactamente como lo pide el webhook (solo dígitos, sin '+').
+ * Si ya viene del webhook (ej: "5493585047802") lo retorna igual.
  */
 function normalizeE164(n: string) {
   const raw = n ?? "";
-  const normalized = raw.replace(/[^\d]/g, ""); // solo dígitos
+  const normalized = raw.replace(/[^\d]/g, ""); // asegura solo dígitos
 
   if (WA_DEBUG) {
     console.log("[WA] normalizeE164:", { raw, normalized });
@@ -28,9 +26,10 @@ export async function waSendText(to: string, body: string) {
   const url = `${GRAPH_BASE}/${env.PHONE_NUMBER_ID}/messages`;
   const toRaw = to;
   const toNormalized = normalizeE164(to);
+
   const payload = {
     messaging_product: "whatsapp",
-    to: toNormalized, // ✅ acepta "543585047802" sin agregar 9
+    to: toNormalized, // 👈 exactamente como lo manda el webhook
     type: "text",
     text: { body },
   };
@@ -42,7 +41,6 @@ export async function waSendText(to: string, body: string) {
       toNormalized,
       payload,
       phoneNumberId: env.PHONE_NUMBER_ID,
-      // ⚠️ nunca loguear el token
     });
   }
 
@@ -77,9 +75,10 @@ export async function waSendTemplate(to: string, name: string, lang = "es") {
   const url = `${GRAPH_BASE}/${env.PHONE_NUMBER_ID}/messages`;
   const toRaw = to;
   const toNormalized = normalizeE164(to);
+
   const payload = {
     messaging_product: "whatsapp",
-    to: toNormalized, // ✅ usa exactamente lo que le pases
+    to: toNormalized, // 👈 mismo formato que webhook
     type: "template",
     template: { name, language: { code: lang } },
   };
