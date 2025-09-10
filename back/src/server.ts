@@ -14,7 +14,7 @@ import privateMessageRoutes from "./routes/privateMessage.routes";
 import { PrivateMessage } from "./models/PrivateMessage";
 import userRoutes from "./routes/user.routes";
 import { User } from "./models/User";
-
+import WaRouter from "./integration/whatsapp.router";
 dotenv.config();
 
 const app = express();
@@ -25,6 +25,7 @@ app.use(cors({ origin: process.env.CORS_ORIGIN?.split(",") || "*" }));
 app.use(express.json());
 app.set("trust proxy", 1); // si estás detrás de un proxy (ej. Heroku, Vercel, Nginx)
 app.use(helmet());
+app.use("/whatsapp", WaRouter);
 // Rate limiting (solo auth; en dev queda desactivado)
 const authLimiter = rateLimit({
   windowMs: 60 * 1000,

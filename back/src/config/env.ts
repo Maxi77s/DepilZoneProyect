@@ -12,4 +12,9 @@ export const env = {
   MONGO_URI: required("MONGO_URI"),
   JWT_SECRET: required("JWT_SECRET"),
   CORS_ORIGIN: required("CORS_ORIGIN", "*").split(","),
+    // 🔑 WhatsApp Cloud API
+  VERIFY_TOKEN: required("VERIFY_TOKEN"),
+  WHATSAPP_TOKEN: required("WHATSAPP_TOKEN"),
+  PHONE_NUMBER_ID: required("PHONE_NUMBER_ID"),
+  WABA_ID: required("WABA_ID", ""), // opcional, solo para operaciones administrativas
 };
