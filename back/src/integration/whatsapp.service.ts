@@ -1,18 +1,25 @@
 // src/integrations/whatsapp/whatsapp.service.ts
 import axios from "axios";
-import { env } from "../config/env"; // 👈 ojo: ruta correcta desde /integrations/whatsapp
+import { env } from "../config/env";
+
 const GRAPH_BASE = "https://graph.facebook.com/v23.0";
 
-// Normaliza a dígitos (E.164 sin '+')
+/**
+ * Normaliza un número al formato E.164 **sin el '+' inicial**
+ * - Limpia caracteres no numéricos
+ * - NO agrega "9" por defecto
+ * - Usa exactamente los dígitos que le pases (ej: 543585047802)
+ */
 function normalizeE164(n: string) {
-  return (n ?? "").toString().replace(/[^\d]/g, "");
+  if (!n) return "";
+  return n.replace(/[^\d]/g, ""); // solo deja dígitos
 }
 
 export async function waSendText(to: string, body: string) {
   const url = `${GRAPH_BASE}/${env.PHONE_NUMBER_ID}/messages`;
   const payload = {
     messaging_product: "whatsapp",
-    to: normalizeE164(to),
+    to: normalizeE164(to), // ✅ acepta "543585047802" sin agregar 9
     type: "text",
     text: { body },
   };
@@ -25,7 +32,6 @@ export async function waSendText(to: string, body: string) {
       },
     });
   } catch (e: any) {
-    // 🔎 imprime el motivo real que manda Meta (token inválido, número no permitido, etc.)
     const status = e?.response?.status;
     const data = e?.response?.data;
     console.error("[WA] send error:", status, data || e?.message);
@@ -33,12 +39,11 @@ export async function waSendText(to: string, body: string) {
   }
 }
 
-// Ejemplo plantilla
 export async function waSendTemplate(to: string, name: string, lang = "es") {
   const url = `${GRAPH_BASE}/${env.PHONE_NUMBER_ID}/messages`;
   const payload = {
     messaging_product: "whatsapp",
-    to: normalizeE164(to),
+    to: normalizeE164(to), // ✅ usa exactamente lo que le pases
     type: "template",
     template: { name, language: { code: lang } },
   };
