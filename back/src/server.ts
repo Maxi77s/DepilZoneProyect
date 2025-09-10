@@ -15,6 +15,7 @@ import { PrivateMessage } from "./models/PrivateMessage";
 import userRoutes from "./routes/user.routes";
 import { User } from "./models/User";
 import WaRouter from "./integration/whatsapp.router";
+import { logWhatsAppBootInfo } from "./integrations/whatsapp/wa.boot";
 dotenv.config();
 
 const app = express();
@@ -26,6 +27,10 @@ app.use(express.json());
 app.set("trust proxy", 1); // si estás detrás de un proxy (ej. Heroku, Vercel, Nginx)
 app.use(helmet());
 app.use("/whatsapp", WaRouter);
+
+// log de arranque (verifica que el token que carga tu back es el correcto)
+logWhatsAppBootInfo();
+
 // Rate limiting (solo auth; en dev queda desactivado)
 const authLimiter = rateLimit({
   windowMs: 60 * 1000,
