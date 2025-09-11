@@ -43,7 +43,6 @@ function endpointMessages() {
 function endpointMedia() {
   return `${GRAPH_BASE}/${env.PHONE_NUMBER_ID}/media`;
 }
-
 /* =========================================================
  *  TEXT
  * =======================================================*/
@@ -70,16 +69,19 @@ export async function waSendText(to: string, body: string) {
   }
 
   try {
-    await axios.post(url, payload, {
+    const res = await axios.post(url, payload, {
       headers: {
         Authorization: `Bearer ${env.WHATSAPP_TOKEN}`,
         "Content-Type": "application/json",
       },
     });
 
+    const msgId = res?.data?.messages?.[0]?.id;
     if (WA_DEBUG) {
-      console.log("[WA] waSendText -> POST OK", { toNormalized });
+      console.log("[WA] waSendText -> POST OK", { toNormalized, msgId, http: res.status });
     }
+    // ⬅ devolver message_id para correlacionar con statuses
+    return { ok: true, msgId, data: res.data };
   } catch (e: any) {
     const status = e?.response?.status;
     const data = e?.response?.data;
@@ -135,6 +137,9 @@ export type WaTemplateComponent = {
  * - lang: código de idioma (ej: "es_AR", "es", "en_US")
  * - components: header/body/buttons con parámetros
  */
+/* =========================================================
+ *  TEMPLATE (con componentes)
+ * =======================================================*/
 export async function waSendTemplate(
   to: string,
   name: string,
@@ -156,27 +161,31 @@ export async function waSendTemplate(
     },
   };
 
+  // ⬅ log legible del template que se envía
   if (WA_DEBUG) {
-    console.log("[WA] waSendTemplate -> about to POST", {
+    console.log("[WA] waSendTemplate -> PAYLOAD", JSON.stringify({
       url,
       toRaw,
       toNormalized,
-      payload,
+      template: payload.template,
       phoneNumberId: env.PHONE_NUMBER_ID,
-    });
+    }, null, 2));
   }
 
   try {
-    await axios.post(url, payload, {
+    const res = await axios.post(url, payload, {
       headers: {
         Authorization: `Bearer ${env.WHATSAPP_TOKEN}`,
         "Content-Type": "application/json",
       },
     });
 
+    const msgId = res?.data?.messages?.[0]?.id;
     if (WA_DEBUG) {
-      console.log("[WA] waSendTemplate -> POST OK", { toNormalized });
+      console.log("[WA] waSendTemplate -> POST OK", { toNormalized, name, lang, msgId, http: res.status });
     }
+    // ⬅ devolver message_id para correlacionar con statuses
+    return { ok: true, msgId, data: res.data };
   } catch (e: any) {
     const status = e?.response?.status;
     const data = e?.response?.data;
@@ -198,6 +207,8 @@ export async function waSendTemplate(
       toNormalized,
       url,
       phoneNumberId: env.PHONE_NUMBER_ID,
+      name,
+      lang
     });
 
     throw e;
