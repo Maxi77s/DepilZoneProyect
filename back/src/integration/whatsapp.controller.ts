@@ -74,13 +74,16 @@ export async function receiveWebhook(req: Request, res: Response) {
         );
 
         try {
-          await waSendTemplate(
+        const result = await waSendTemplate(
             from,
             env.WA_TEMPLATE_NAME, // p.ej. "plantillachat"
             env.WA_TEMPLATE_LANG, // p.ej. "es_AR"
             components
           );
-        } catch {}
+          console.log("[WA][TPL][SENT]", JSON.stringify(result, null, 2));
+        } catch (e:any){
+           console.error("[WA][TPL][ERR]", e?.response?.data ?? e?.message ?? e);
+        }
       }
     }
 
