@@ -17,4 +17,8 @@ export const env = {
   WHATSAPP_TOKEN: required("WHATSAPP_TOKEN"),
   PHONE_NUMBER_ID: required("PHONE_NUMBER_ID"),
   WABA_ID: required("WABA_ID", ""), // opcional, solo para operaciones administrativas
+
+  // 🔑 Plantillas WhatsApp
+  WA_TEMPLATE_NAME: required("WA_TEMPLATE_NAME"),
+  WA_TEMPLATE_LANG: required("WA_TEMPLATE_LANG", "es_AR"),
 };

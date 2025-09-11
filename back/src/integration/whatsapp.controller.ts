@@ -2,6 +2,7 @@
 import type { Request, Response } from "express";
 import { env } from "../config/env";           
 import { waSendText } from "./whatsapp.service";
+import { waSendTemplate } from "./whatsapp.service"; // 🔵 NUEVO
 
 export function verifyWebhook(req: Request, res: Response) {
   const mode = req.query["hub.mode"];
@@ -48,6 +49,21 @@ export async function receiveWebhook(req: Request, res: Response) {
           } catch (err) {
             console.error("[WA] Error enviando respuesta:", err);
           }
+
+          // 🔵 NUEVO: Enviar además la plantilla configurada por ENV
+          try {
+            console.log("[WA] Enviando plantilla:", {
+              name: env.WA_TEMPLATE_NAME,
+              lang: env.WA_TEMPLATE_LANG,
+              to: from,
+            });
+            await waSendTemplate(from, env.WA_TEMPLATE_NAME, env.WA_TEMPLATE_LANG);
+            console.log("[WA] Plantilla enviada OK");
+          } catch (err) {
+            console.error("[WA] Error enviando plantilla:", err);
+          }
+          // 🔵 FIN NUEVO
+
         } else {
           // Ejemplos: image, location, interactive, etc.
           console.log(`ℹ️ Tipo de mensaje no manejado (${type}).`);
