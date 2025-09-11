@@ -22,4 +22,5 @@ export const env = {
   WA_TEMPLATE_NAME: required("WA_TEMPLATE_NAME"),
   WA_TEMPLATE_LANG: required("WA_TEMPLATE_LANG", "es_AR"),
   WA_TEMPLATE_VIDEO_URL: required("WA_TEMPLATE_VIDEO_URL", ""),
+  WA_TEMPLATE_BTN_SUFFIX: required("WA_TEMPLATE_BTN_SUFFIX", ""),
 };
