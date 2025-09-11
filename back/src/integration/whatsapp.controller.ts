@@ -7,7 +7,6 @@ export function verifyWebhook(req: Request, res: Response) {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
-
   if (mode === "subscribe" && token === env.VERIFY_TOKEN) {
     return res.status(200).send(challenge);
   }
@@ -18,14 +17,12 @@ export async function receiveWebhook(req: Request, res: Response) {
   try {
     const value = req.body?.entry?.[0]?.changes?.[0]?.value;
 
-    // 1) Mensajes entrantes
+    // 1) Procesar mensajes entrantes
     const messages = value?.messages;
     if (Array.isArray(messages)) {
       for (const msg of messages) {
-        const from: string = msg.from;
-        const type: string = msg.type;
-
-        if (type !== "text") continue;
+        const from: string = msg.from; // E.164 sin '+'
+        if (msg.type !== "text") continue;
 
         const text = (msg.text?.body ?? "").trim().toLowerCase();
 
@@ -34,69 +31,42 @@ export async function receiveWebhook(req: Request, res: Response) {
         if (text === "hola") reply = "¡Hola! Soy tu bot 🤖";
         if (text === "menu") reply = "Opciones:\n1) estado\n2) ayuda";
 
+        // Enviar texto (errores silenciosos)
         try {
           await waSendText(from, reply);
-        } catch (e) {
-          // silencioso: no bloquea el resto del flujo
-        }
+        } catch {}
 
-        // 2) Envío de plantilla (SOLO agrega componentes si hay env válidas)
+        // 2) Enviar plantilla: SOLO header video (plantilla sin variables)
         try {
-          type TemplateParam =
-            | { type: "text"; text: string }
-            | { type: "video"; video: { link: string } };
-
-          const components: any[] = [];
-
-          // HEADER: video por link .mp4 público
           const videoUrl = env.WA_TEMPLATE_VIDEO_URL?.trim();
-          if (videoUrl && /\.mp4(\?.*)?$/.test(videoUrl)) {
-            const headerParams: TemplateParam[] = [
-              { type: "video", video: { link: videoUrl } },
-            ];
-            components.push({ type: "header", parameters: headerParams });
-          }
+          const hasMp4 = !!videoUrl && /\.mp4(\?.*)?$/.test(videoUrl);
 
-          // BODY: solo si hay vars (y tu plantilla las tiene)
-          const bodyTitle = env.WA_TEMPLATE_BODY_TITLE?.trim();
-          const bodyMessage = env.WA_TEMPLATE_BODY_MESSAGE?.trim();
-          if (bodyTitle || bodyMessage) {
-            const bodyParams: TemplateParam[] = [];
-            if (bodyTitle) bodyParams.push({ type: "text", text: bodyTitle });
-            if (bodyMessage) bodyParams.push({ type: "text", text: bodyMessage });
-            components.push({ type: "body", parameters: bodyParams });
-          }
+          const components: any[] = hasMp4
+            ? [
+                {
+                  type: "header",
+                  parameters: [{ type: "video", video: { link: videoUrl! } }],
+                },
+              ]
+            : []; // si no hay video válido, se envía sin components (plantilla estática)
 
-          // BOTÓN URL dinámico: solo si tu plantilla tiene {{1}} en el botón
-          const btnSuffix = env.WA_TEMPLATE_BTN_SUFFIX?.trim();
-          if (btnSuffix) {
-            components.push({
-              type: "button",
-              sub_type: "url",
-              index: "0",
-              parameters: [{ type: "text", text: btnSuffix }],
-            });
-          }
-
-          // Si no hay ningún componente, igual se puede enviar la plantilla estática
           await waSendTemplate(
             from,
-            env.WA_TEMPLATE_NAME,
-            env.WA_TEMPLATE_LANG,
+            env.WA_TEMPLATE_NAME, // p.ej. "plantillachat"
+            env.WA_TEMPLATE_LANG, // p.ej. "es_AR"
             components
           );
-        } catch {
-          // si falla la plantilla no cortamos la respuesta del webhook
-        }
+        } catch {}
       }
     }
 
-    // 3) Status entrantes (sent, delivered, read, failed). No hacemos nada activo.
-    // const statuses = value?.statuses; // opcional: registrar métricas si querés
+    // 3) Status entrantes: sin acción (se podrían loguear o metricar)
+    // const statuses = value?.statuses;
 
-    // Siempre 200 para que Meta no reintente
+    // Responder siempre 200 para evitar reintentos
     res.sendStatus(200);
   } catch {
-    res.sendStatus(200); // seguimos respondiendo 200 para evitar reintentos
+    // Incluso ante error interno, respondemos 200 para que Meta no reintente
+    res.sendStatus(200);
   }
 }
