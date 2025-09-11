@@ -49,7 +49,7 @@ export async function receiveWebhook(req: Request, res: Response) {
             console.error("[WA] Error enviando respuesta:", err);
           }
 
-          // Enviar la plantilla con header de VIDEO (solo LINK .mp4) y botón URL dinámico
+          // Enviar la plantilla con header VIDEO (.mp4), body params (título/mensaje) y botón URL dinámico
           try {
             type TemplateParam =
               | { type: "text"; text: string }
@@ -68,23 +68,34 @@ export async function receiveWebhook(req: Request, res: Response) {
               console.log("[WA] Header VIDEO por LINK:", videoUrl);
             }
 
-            // BODY: tu plantilla no usa variables en body (vacío). Si agregás {{1}}, {{2}}, ponelos acá.
+            // ===== BODY PARAMS EN ORDEN DE LA PLANTILLA =====
+            // Asumimos: {{1}} = título, {{2}} = mensaje
             const bodyParams: TemplateParam[] = [];
+            const bodyTitle = env.WA_TEMPLATE_BODY_TITLE?.trim();
+            const bodyMessage = env.WA_TEMPLATE_BODY_MESSAGE?.trim();
 
-            // BUTTON URL dinámico (index 0) → si la plantilla tiene URL con {{1}}, DEBES enviar este parámetro.
-            // Ej: base https://youtube.com/watch?v=  -> WA_TEMPLATE_BTN_SUFFIX=dQw4w9WgXcQ
+            if (bodyTitle) bodyParams.push({ type: "text", text: bodyTitle });
+            if (bodyMessage) bodyParams.push({ type: "text", text: bodyMessage });
+
+            // Si tu plantilla exige ambos y falta alguno, logueamos
+            if (!bodyTitle || !bodyMessage) {
+              console.warn("[WA] Body params incompletos:",
+                { hasTitle: !!bodyTitle, hasMessage: !!bodyMessage }
+              );
+            }
+
+            // ===== BOTÓN URL DINÁMICO ({{1}}) =====
             const buttonComponents =
-              env.WA_TEMPLATE_BTN_SUFFIX && env.WA_TEMPLATE_BTN_SUFFIX.trim().length > 0
-                ? [
-                    {
-                      type: "button",
-                      sub_type: "url" as const,
-                      index: "0",
-                      parameters: [{ type: "text", text: env.WA_TEMPLATE_BTN_SUFFIX.trim() }],
-                    },
-                  ]
+              env.WA_TEMPLATE_BTN_SUFFIX?.trim()
+                ? [{
+                    type: "button",
+                    sub_type: "url" as const,
+                    index: "0",
+                    parameters: [{ type: "text", text: env.WA_TEMPLATE_BTN_SUFFIX.trim() }],
+                  }]
                 : [];
 
+            // ===== ARMADO DE COMPONENTS =====
             const components: any[] = [];
             if (headerParams.length) components.push({ type: "header", parameters: headerParams });
             if (bodyParams.length) components.push({ type: "body", parameters: bodyParams });
@@ -106,7 +117,7 @@ export async function receiveWebhook(req: Request, res: Response) {
             console.error("[WA] template error:", status, data || err?.message);
             console.error(
               "[WA] Tips: Verificá name/lang EXACTO; header VIDEO con URL .mp4 pública; " +
-                "y si el botón URL tiene {{1}}, enviar parameters (suffix) en index 0."
+              "orden y cantidad de body vars; y si el botón URL tiene {{1}}, enviar el suffix en index 0."
             );
           }
         } else {
