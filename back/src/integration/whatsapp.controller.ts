@@ -38,10 +38,10 @@ export async function receiveWebhook(req: Request, res: Response) {
 
         const components = [
           {
-            type: "button",
+            type: "button" as const,
             sub_type: "url" as const,
             index: "0",
-            parameters: [{ type: "text", text: btnSuffix }],
+            parameters: [{ type: "text" as const, text: btnSuffix }],
           },
         ];
 
