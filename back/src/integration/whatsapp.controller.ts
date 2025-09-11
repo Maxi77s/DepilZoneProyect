@@ -17,11 +17,10 @@ export async function receiveWebhook(req: Request, res: Response) {
   try {
     const value = req.body?.entry?.[0]?.changes?.[0]?.value;
 
-    // 1) Procesar mensajes entrantes
     const messages = value?.messages;
     if (Array.isArray(messages)) {
       for (const msg of messages) {
-        const from: string = msg.from; // E.164 sin '+'
+        const from: string = msg.from;
         if (msg.type !== "text") continue;
 
         const text = (msg.text?.body ?? "").trim().toLowerCase();
@@ -31,22 +30,32 @@ export async function receiveWebhook(req: Request, res: Response) {
         if (text === "hola") reply = "¡Hola! Soy tu bot 🤖";
         if (text === "menu") reply = "Opciones:\n1) estado\n2) ayuda";
 
-        // Enviar texto (errores silenciosos)
         try { await waSendText(from, reply); } catch {}
 
-        // 2) Enviar plantilla SIN parámetros ni components (usa lo definido en Meta)
+        // === Enviar plantilla con botón URL DINÁMICO (plantilla tiene {{1}}) ===
+        // Si tu plantilla tiene 1 botón con {{1}} en index 0, hay que mandar el parámetro.
+        const btnSuffix = (env.WA_TEMPLATE_BTN_SUFFIX || "5LWUj1y8VMA").trim();
+
+        const components = [
+          {
+            type: "button",
+            sub_type: "url" as const,
+            index: "0",
+            parameters: [{ type: "text", text: btnSuffix }],
+          },
+        ];
+
         try {
           await waSendTemplate(
             from,
-            env.WA_TEMPLATE_NAME, // ej: "plantillachat"
-            env.WA_TEMPLATE_LANG, // ej: "es_AR"
-            []                    // sin components: header/body/botón vienen de la plantilla
+            env.WA_TEMPLATE_NAME, // p.ej. "plantillachat"
+            env.WA_TEMPLATE_LANG, // p.ej. "es_AR"
+            components
           );
         } catch {}
       }
     }
 
-    // 3) Siempre 200 para evitar reintentos de Meta
     res.sendStatus(200);
   } catch {
     res.sendStatus(200);
