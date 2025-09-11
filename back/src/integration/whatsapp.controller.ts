@@ -32,41 +32,23 @@ export async function receiveWebhook(req: Request, res: Response) {
         if (text === "menu") reply = "Opciones:\n1) estado\n2) ayuda";
 
         // Enviar texto (errores silenciosos)
+        try { await waSendText(from, reply); } catch {}
+
+        // 2) Enviar plantilla SIN parámetros ni components (usa lo definido en Meta)
         try {
-          await waSendText(from, reply);
-        } catch {}
-
-        // 2) Enviar plantilla: SOLO header video (plantilla sin variables)
-        try {
-          const videoUrl = env.WA_TEMPLATE_VIDEO_URL?.trim();
-          const hasMp4 = !!videoUrl && /\.mp4(\?.*)?$/.test(videoUrl);
-
-          const components: any[] = hasMp4
-            ? [
-                {
-                  type: "header",
-                  parameters: [{ type: "video", video: { link: videoUrl! } }],
-                },
-              ]
-            : []; // si no hay video válido, se envía sin components (plantilla estática)
-
           await waSendTemplate(
             from,
-            env.WA_TEMPLATE_NAME, // p.ej. "plantillachat"
-            env.WA_TEMPLATE_LANG, // p.ej. "es_AR"
-            components
+            env.WA_TEMPLATE_NAME, // ej: "plantillachat"
+            env.WA_TEMPLATE_LANG, // ej: "es_AR"
+            []                    // sin components: header/body/botón vienen de la plantilla
           );
         } catch {}
       }
     }
 
-    // 3) Status entrantes: sin acción (se podrían loguear o metricar)
-    // const statuses = value?.statuses;
-
-    // Responder siempre 200 para evitar reintentos
+    // 3) Siempre 200 para evitar reintentos de Meta
     res.sendStatus(200);
   } catch {
-    // Incluso ante error interno, respondemos 200 para que Meta no reintente
     res.sendStatus(200);
   }
 }
