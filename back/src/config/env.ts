@@ -21,6 +21,5 @@ export const env = {
   // 🔑 Plantillas WhatsApp
   WA_TEMPLATE_NAME: required("WA_TEMPLATE_NAME"),
   WA_TEMPLATE_LANG: required("WA_TEMPLATE_LANG", "es_AR"),
-  WA_TEMPLATE_VIDEO_MEDIA_ID: required("WA_TEMPLATE_VIDEO_MEDIA_ID", ""),
- WA_TEMPLATE_VIDEO_URL: required("WA_TEMPLATE_VIDEO_URL", ""),
+  WA_TEMPLATE_VIDEO_URL: required("WA_TEMPLATE_VIDEO_URL", ""),
 };
