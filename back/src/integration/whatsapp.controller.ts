@@ -49,25 +49,30 @@ export async function receiveWebhook(req: Request, res: Response) {
             console.error("[WA] Error enviando respuesta:", err);
           }
 
-          // Enviar la plantilla con header de VIDEO y botón URL dinámico
+          // Enviar la plantilla con header de VIDEO (solo LINK .mp4) y botón URL dinámico
           try {
             type TemplateParam =
               | { type: "text"; text: string }
-              | { type: "video"; video: { id?: string; link?: string } };
+              | { type: "video"; video: { link: string } };
 
-            // HEADER: usa MEDIA_ID o URL .mp4 (YouTube NO funciona aquí)
-            const headerParams: TemplateParam[] =
-              env.WA_TEMPLATE_VIDEO_URL
-                ? [{ type: "video", video: { id: env.WA_TEMPLATE_VIDEO_URL } }]
-                : env.WA_TEMPLATE_VIDEO_URL
-                ? [{ type: "video", video: { link: env.WA_TEMPLATE_VIDEO_URL } }]
-                : [];
+            // ===== HEADER VIDEO SOLO POR LINK .mp4 =====
+            let headerParams: TemplateParam[] = [];
+            const videoUrl = env.WA_TEMPLATE_VIDEO_URL?.trim();
+
+            if (!videoUrl) {
+              console.warn("[WA] Sin header de video: WA_TEMPLATE_VIDEO_URL no está seteado");
+            } else if (!/\.mp4(\?.*)?$/.test(videoUrl)) {
+              console.error("[WA] URL inválida para header: debe apuntar a un .mp4 público →", videoUrl);
+            } else {
+              headerParams = [{ type: "video", video: { link: videoUrl } }];
+              console.log("[WA] Header VIDEO por LINK:", videoUrl);
+            }
 
             // BODY: tu plantilla no usa variables en body (vacío). Si agregás {{1}}, {{2}}, ponelos acá.
             const bodyParams: TemplateParam[] = [];
 
-            // BUTTON URL dinámico (index 0): si la plantilla tiene URL con {{1}}, DEBES enviar este parámetro.
-            // Ej: si la URL base es https://youtube.com/watch?v=  -> WA_TEMPLATE_BTN_SUFFIX=dQw4w9WgXcQ
+            // BUTTON URL dinámico (index 0) → si la plantilla tiene URL con {{1}}, DEBES enviar este parámetro.
+            // Ej: base https://youtube.com/watch?v=  -> WA_TEMPLATE_BTN_SUFFIX=dQw4w9WgXcQ
             const buttonComponents =
               env.WA_TEMPLATE_BTN_SUFFIX && env.WA_TEMPLATE_BTN_SUFFIX.trim().length > 0
                 ? [
@@ -75,7 +80,7 @@ export async function receiveWebhook(req: Request, res: Response) {
                       type: "button",
                       sub_type: "url" as const,
                       index: "0",
-                      parameters: [{ type: "text", text: env.WA_TEMPLATE_BTN_SUFFIX! }],
+                      parameters: [{ type: "text", text: env.WA_TEMPLATE_BTN_SUFFIX.trim() }],
                     },
                   ]
                 : [];
@@ -100,7 +105,7 @@ export async function receiveWebhook(req: Request, res: Response) {
             const data = err?.response?.data;
             console.error("[WA] template error:", status, data || err?.message);
             console.error(
-              "[WA] Tips: Verificá name/lang EXACTO; header VIDEO con MEDIA_ID o URL .mp4 pública; " +
+              "[WA] Tips: Verificá name/lang EXACTO; header VIDEO con URL .mp4 pública; " +
                 "y si el botón URL tiene {{1}}, enviar parameters (suffix) en index 0."
             );
           }
