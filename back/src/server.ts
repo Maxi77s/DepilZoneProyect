@@ -16,6 +16,7 @@ import userRoutes from "./routes/user.routes";
 import { User } from "./models/User";
 import WaRouter from "./integration/whatsapp.router";
 import { logWhatsAppBootInfo } from "./integration/wa.boot";
+import path from "path";
 dotenv.config();
 
 const app = express();
@@ -26,7 +27,10 @@ app.use(cors({ origin: process.env.CORS_ORIGIN?.split(",") || "*" }));
 app.use(express.json());
 app.set("trust proxy", 1); // si estás detrás de un proxy (ej. Heroku, Vercel, Nginx)
 app.use(helmet());
-app.use("/whatsapp", WaRouter);
+app.use("/whatsapp", WaRouter);app.use(
+  "/assets",
+  express.static(path.join(__dirname, "assets"), { maxAge: "30d" })
+);
 
 // log de arranque (verifica que el token que carga tu back es el correcto)
 logWhatsAppBootInfo();

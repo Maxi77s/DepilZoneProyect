@@ -1,8 +1,7 @@
 // src/integrations/whatsapp/whatsapp.controller.ts
 import type { Request, Response } from "express";
-import { env } from "../config/env";           
-import { waSendText } from "./whatsapp.service";
-import { waSendTemplate } from "./whatsapp.service"; // 🔵 NUEVO
+import { env } from "../config/env";
+import { waSendText, waSendTemplate } from "./whatsapp.service";
 
 export function verifyWebhook(req: Request, res: Response) {
   const mode = req.query["hub.mode"];
@@ -50,20 +49,49 @@ export async function receiveWebhook(req: Request, res: Response) {
             console.error("[WA] Error enviando respuesta:", err);
           }
 
-          // 🔵 NUEVO: Enviar además la plantilla configurada por ENV
+          // 🔵 Enviar la plantilla con header de VIDEO (MEDIA_ID o URL)
           try {
+            // Armamos components según tengas MEDIA_ID o URL
+            const headerParams =
+              env.WA_TEMPLATE_VIDEO_MEDIA_ID
+                ? [{ type: "video", video: { id: env.WA_TEMPLATE_VIDEO_MEDIA_ID } }]
+                : env.WA_TEMPLATE_VIDEO_URL
+                ? [{ type: "video", video: { link: env.WA_TEMPLATE_VIDEO_URL } }]
+                : [];
+
+            // Si tu body tiene {{1}} {{2}}, agregá la misma cantidad aquí:
+            interface TemplateParameter {
+              type: "text" | "video";
+              text?: string;
+              video?: { id?: string; link?: string };
+            }
+
+            const bodyParams: TemplateParameter[] = [
+              // { type: "text", text: "Maxi" },
+              // { type: "text", text: "Mensaje de info del chat" },
+            ];
+
+            const components: any[] = [];
+            if (headerParams.length) components.push({ type: "header", parameters: headerParams });
+            if (bodyParams.length) components.push({ type: "body", parameters: bodyParams });
+
             console.log("[WA] Enviando plantilla:", {
               name: env.WA_TEMPLATE_NAME,
               lang: env.WA_TEMPLATE_LANG,
-              to: from,
+              hasHeaderVideo: headerParams.length > 0,
+              bodyVars: bodyParams.length,
             });
-            await waSendTemplate(from, env.WA_TEMPLATE_NAME, env.WA_TEMPLATE_LANG);
-            console.log("[WA] Plantilla enviada OK");
-          } catch (err) {
-            console.error("[WA] Error enviando plantilla:", err);
-          }
-          // 🔵 FIN NUEVO
 
+            await waSendTemplate(from, env.WA_TEMPLATE_NAME, env.WA_TEMPLATE_LANG, components);
+            console.log("[WA] Plantilla enviada OK");
+          } catch (err: any) {
+            const status = err?.response?.status;
+            const data = err?.response?.data;
+            console.error("[WA] Error enviando plantilla:", status, data || err?.message);
+            console.error(
+              "[WA] Tips: Verificá que el nombre/idioma coincidan EXACTO y que el header de VIDEO se esté enviando (MEDIA_ID o URL .mp4)."
+            );
+          }
         } else {
           // Ejemplos: image, location, interactive, etc.
           console.log(`ℹ️ Tipo de mensaje no manejado (${type}).`);

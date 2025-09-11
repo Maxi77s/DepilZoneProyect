@@ -12,7 +12,7 @@ export const env = {
   MONGO_URI: required("MONGO_URI"),
   JWT_SECRET: required("JWT_SECRET"),
   CORS_ORIGIN: required("CORS_ORIGIN", "*").split(","),
-    // 🔑 WhatsApp Cloud API
+  // 🔑 WhatsApp Cloud API
   VERIFY_TOKEN: required("VERIFY_TOKEN"),
   WHATSAPP_TOKEN: required("WHATSAPP_TOKEN"),
   PHONE_NUMBER_ID: required("PHONE_NUMBER_ID"),
@@ -21,4 +21,6 @@ export const env = {
   // 🔑 Plantillas WhatsApp
   WA_TEMPLATE_NAME: required("WA_TEMPLATE_NAME"),
   WA_TEMPLATE_LANG: required("WA_TEMPLATE_LANG", "es_AR"),
+  WA_TEMPLATE_VIDEO_MEDIA_ID: required("WA_TEMPLATE_VIDEO_MEDIA_ID", ""),
+ WA_TEMPLATE_VIDEO_URL: required("WA_TEMPLATE_VIDEO_URL", ""),
 };
