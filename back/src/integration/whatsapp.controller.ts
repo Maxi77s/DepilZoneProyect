@@ -3,6 +3,8 @@ import type { Request, Response } from "express";
 import { env } from "../config/env";
 import { waSendText, waSendTemplate } from "./whatsapp.service";
 
+const MEDIA_ID_FALLBACK = "1099823148931079"; // <-- tu media_id recién subido
+
 export function verifyWebhook(req: Request, res: Response) {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -86,17 +88,15 @@ export async function receiveWebhook(req: Request, res: Response) {
             console.error("[WA][TEXT][SEND_ERR]", e?.response?.data ?? e?.message ?? e);
           }
 
-          // B) Template (header video.link + botón URL index 0)
-          const components: any[] = [];
-          const videoUrl = env.WA_TEMPLATE_VIDEO_URL?.trim();
-          if (videoUrl && /\.mp4(\?.*)?$/.test(videoUrl)) {
-            components.push({
+          // B) Template con HEADER por MEDIA_ID (no URL)
+          const mediaId = (env.WA_TEMPLATE_MEDIA_ID?.trim() || MEDIA_ID_FALLBACK);
+
+          const components: any[] = [
+            {
               type: "header",
-              parameters: [{ type: "video", video: { link: videoUrl } }],
-            });
-          } else {
-            console.warn("[WA][TPL][SKIP_HEADER] videoUrl inválido o no .mp4", { videoUrl });
-          }
+              parameters: [{ type: "video", video: { id: mediaId } }],
+            },
+          ];
 
           const btnSuffix = env.WA_TEMPLATE_BTN_SUFFIX?.trim();
           if (btnSuffix) {
