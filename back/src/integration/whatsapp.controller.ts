@@ -15,40 +15,13 @@ export function verifyWebhook(req: Request, res: Response) {
 
 export async function receiveWebhook(req: Request, res: Response) {
   try {
-    const entry = req.body?.entry?.[0];
-    const change = entry?.changes?.[0];
-    const value = change?.value;
+    const value = req.body?.entry?.[0]?.changes?.[0]?.value;
 
-    // 🔎 1) LOG DE STATUSES (delivery reports)
-    if (Array.isArray(value?.statuses)) {
-      for (const s of value.statuses) {
-        console.log("[WA][STATUS]", JSON.stringify({
-          id: s.id,                      // correlaciona con messages[0].id devuelto por Meta
-          status: s.status,              // sent | delivered | read | failed
-          recipient_id: s.recipient_id,
-          timestamp: s.timestamp,
-          conversation: s.conversation,
-          pricing: s.pricing,
-          errors: s.errors               // [{ code, title, details }]
-        }, null, 2));
-      }
-    }
-
-    // 💬 2) MENSAJES ENTRANTES
     const messages = value?.messages;
     if (Array.isArray(messages)) {
       for (const msg of messages) {
         const from: string = msg.from;
-        const type = msg.type;
-
-        console.log("[WA][INCOMING]", JSON.stringify({
-          from,
-          type,
-          text: msg.text?.body,
-          metadata_phone_number_id: value?.metadata?.phone_number_id
-        }, null, 2));
-
-        if (type !== "text") continue;
+        if (msg.type !== "text") continue;
 
         const text = (msg.text?.body ?? "").trim().toLowerCase();
 
@@ -57,27 +30,31 @@ export async function receiveWebhook(req: Request, res: Response) {
         if (text === "hola") reply = "¡Hola! Soy tu bot 🤖";
         if (text === "menu") reply = "Opciones:\n1) estado\n2) ayuda";
 
-        // A) Enviar texto
         try {
-          const r = await waSendText(from, reply);
-          console.log("[WA][TEXT][SENT]", JSON.stringify({ to: from, result: r }, null, 2));
-        } catch (e: any) {
-          console.error("[WA][TEXT][SEND_ERR]", e?.response?.data ?? e?.message ?? e);
-        }
+          await waSendText(from, reply);
+        } catch {}
 
-        // B) Armar components del template
+        // === Enviar plantilla con botón URL DINÁMICO (plantilla tiene {{1}}) ===
+        // Si tu plantilla tiene 1 botón con {{1}} en index 0, hay que mandar el parámetro.
+
+        // ===== ARMADO DE COMPONENTS =====
         const components: any[] = [];
 
+        // HEADER: video .mp4 obligatorio (la plantilla lo espera)
         const videoUrl = env.WA_TEMPLATE_VIDEO_URL?.trim();
-        if (videoUrl && /\.mp4(\?.*)?$/.test(videoUrl)) {
+        if (!videoUrl || !/\.mp4(\?.*)?$/.test(videoUrl)) {
+          // Si no tenés un .mp4 público válido, no intentes enviar la plantilla
+          // porque WhatsApp va a rechazarla por "header parameter empty".
+          // Podés salir silenciosamente o avisar por log.
+          // return; // si querés abortar el envío de la plantilla
+        } else {
           components.push({
             type: "header",
             parameters: [{ type: "video", video: { link: videoUrl } }],
           });
-        } else {
-          console.warn("[WA][TPL][SKIP_HEADER] videoUrl inválido o no .mp4", { videoUrl });
         }
 
+        // BOTÓN URL: solo si tu botón tiene {{1}} (es dinámico)
         const btnSuffix = env.WA_TEMPLATE_BTN_SUFFIX?.trim();
         if (btnSuffix) {
           components.push({
@@ -86,43 +63,29 @@ export async function receiveWebhook(req: Request, res: Response) {
             index: "0",
             parameters: [{ type: "text", text: btnSuffix }],
           });
-        } else {
-          console.warn("[WA][TPL][SKIP_BUTTON] WA_TEMPLATE_BTN_SUFFIX vacío");
         }
 
-        if (!env.WA_TEMPLATE_NAME || !env.WA_TEMPLATE_LANG) {
-          console.error("[WA][TPL][ABORT] Falta WA_TEMPLATE_NAME o WA_TEMPLATE_LANG");
-          continue;
-        }
+        // Enviar la plantilla
+        await waSendTemplate(
+          from,
+          env.WA_TEMPLATE_NAME, // "plantillachat"
+          env.WA_TEMPLATE_LANG, // "es_AR"
+          components
+        );
 
-        // 🔎 C) Log completo del payload de template (sin [Object])
-        const tplPreview = {
-          to: from,
-          name: env.WA_TEMPLATE_NAME,
-          language: { code: env.WA_TEMPLATE_LANG },
-          components,
-        };
-        console.log("[WA][TPL][PAYLOAD]", JSON.stringify(tplPreview, null, 2));
-
-        // ✅ D) Enviar plantilla **una sola vez**
         try {
-          const tr = await waSendTemplate(
+          await waSendTemplate(
             from,
-            env.WA_TEMPLATE_NAME, // "plantillachat"
-            env.WA_TEMPLATE_LANG, // "es_AR"
+            env.WA_TEMPLATE_NAME, // p.ej. "plantillachat"
+            env.WA_TEMPLATE_LANG, // p.ej. "es_AR"
             components
           );
-          console.log("[WA][TPL][SENT]", JSON.stringify({ to: from, result: tr }, null, 2));
-        } catch (e: any) {
-          // Muestra el error real de Meta si lo hay
-          console.error("[WA][TPL][SEND_ERR]", e?.response?.data ?? e?.message ?? e);
-        }
+        } catch {}
       }
     }
 
     res.sendStatus(200);
-  } catch (e) {
-    console.error("[WA][WEBHOOK][ERR]", e);
-    res.sendStatus(200); // evitar reintentos masivos
+  } catch {
+    res.sendStatus(200);
   }
 }
