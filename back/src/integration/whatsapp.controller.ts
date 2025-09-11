@@ -9,135 +9,94 @@ export function verifyWebhook(req: Request, res: Response) {
   const challenge = req.query["hub.challenge"];
 
   if (mode === "subscribe" && token === env.VERIFY_TOKEN) {
-    console.log("[WA] Webhook verificado correctamente");
     return res.status(200).send(challenge);
   }
-  console.warn("[WA] Webhook verification failed");
   return res.sendStatus(403);
 }
 
 export async function receiveWebhook(req: Request, res: Response) {
   try {
-    // Log completo para depurar
-    console.log("🌐 Webhook recibido:", JSON.stringify(req.body, null, 2));
-
-    const entry = req.body?.entry?.[0];
-    const change = entry?.changes?.[0];
-    const value = change?.value;
+    const value = req.body?.entry?.[0]?.changes?.[0]?.value;
 
     // 1) Mensajes entrantes
     const messages = value?.messages;
-    if (Array.isArray(messages) && messages.length > 0) {
+    if (Array.isArray(messages)) {
       for (const msg of messages) {
-        console.log("📩 Mensaje entrante:", msg);
-
-        const from: string = msg.from; // E.164 sin '+'
+        const from: string = msg.from;
         const type: string = msg.type;
 
-        if (type === "text") {
-          const text = (msg.text?.body ?? "").trim().toLowerCase();
-          console.log("✍️ Texto recibido:", text);
+        if (type !== "text") continue;
 
-          let reply = "Escribe 'menu' para ver opciones.";
-          if (text === "hola") reply = "¡Hola! Soy tu bot 🤖";
-          if (text === "menu") reply = "Opciones:\n1) estado\n2) ayuda";
+        const text = (msg.text?.body ?? "").trim().toLowerCase();
 
-          console.log("📤 Respuesta a enviar:", reply);
-          try {
-            await waSendText(from, reply);
-          } catch (err) {
-            console.error("[WA] Error enviando respuesta:", err);
+        // Respuesta simple
+        let reply = "Escribe 'menu' para ver opciones.";
+        if (text === "hola") reply = "¡Hola! Soy tu bot 🤖";
+        if (text === "menu") reply = "Opciones:\n1) estado\n2) ayuda";
+
+        try {
+          await waSendText(from, reply);
+        } catch (e) {
+          // silencioso: no bloquea el resto del flujo
+        }
+
+        // 2) Envío de plantilla (SOLO agrega componentes si hay env válidas)
+        try {
+          type TemplateParam =
+            | { type: "text"; text: string }
+            | { type: "video"; video: { link: string } };
+
+          const components: any[] = [];
+
+          // HEADER: video por link .mp4 público
+          const videoUrl = env.WA_TEMPLATE_VIDEO_URL?.trim();
+          if (videoUrl && /\.mp4(\?.*)?$/.test(videoUrl)) {
+            const headerParams: TemplateParam[] = [
+              { type: "video", video: { link: videoUrl } },
+            ];
+            components.push({ type: "header", parameters: headerParams });
           }
 
-          // Enviar la plantilla con header VIDEO (.mp4), body params (título/mensaje) y botón URL dinámico
-          try {
-            type TemplateParam =
-              | { type: "text"; text: string }
-              | { type: "video"; video: { link: string } };
-
-            // ===== HEADER VIDEO SOLO POR LINK .mp4 =====
-            let headerParams: TemplateParam[] = [];
-            const videoUrl = env.WA_TEMPLATE_VIDEO_URL?.trim();
-
-            if (!videoUrl) {
-              console.warn("[WA] Sin header de video: WA_TEMPLATE_VIDEO_URL no está seteado");
-            } else if (!/\.mp4(\?.*)?$/.test(videoUrl)) {
-              console.error("[WA] URL inválida para header: debe apuntar a un .mp4 público →", videoUrl);
-            } else {
-              headerParams = [{ type: "video", video: { link: videoUrl } }];
-              console.log("[WA] Header VIDEO por LINK:", videoUrl);
-            }
-
-            // ===== BODY PARAMS EN ORDEN DE LA PLANTILLA =====
-            // Asumimos: {{1}} = título, {{2}} = mensaje
+          // BODY: solo si hay vars (y tu plantilla las tiene)
+          const bodyTitle = env.WA_TEMPLATE_BODY_TITLE?.trim();
+          const bodyMessage = env.WA_TEMPLATE_BODY_MESSAGE?.trim();
+          if (bodyTitle || bodyMessage) {
             const bodyParams: TemplateParam[] = [];
-            const bodyTitle = env.WA_TEMPLATE_BODY_TITLE?.trim();
-            const bodyMessage = env.WA_TEMPLATE_BODY_MESSAGE?.trim();
-
             if (bodyTitle) bodyParams.push({ type: "text", text: bodyTitle });
             if (bodyMessage) bodyParams.push({ type: "text", text: bodyMessage });
-
-            // Si tu plantilla exige ambos y falta alguno, logueamos
-            if (!bodyTitle || !bodyMessage) {
-              console.warn("[WA] Body params incompletos:",
-                { hasTitle: !!bodyTitle, hasMessage: !!bodyMessage }
-              );
-            }
-
-            // ===== BOTÓN URL DINÁMICO ({{1}}) =====
-            const buttonComponents =
-              env.WA_TEMPLATE_BTN_SUFFIX?.trim()
-                ? [{
-                    type: "button",
-                    sub_type: "url" as const,
-                    index: "0",
-                    parameters: [{ type: "text", text: env.WA_TEMPLATE_BTN_SUFFIX.trim() }],
-                  }]
-                : [];
-
-            // ===== ARMADO DE COMPONENTS =====
-            const components: any[] = [];
-            if (headerParams.length) components.push({ type: "header", parameters: headerParams });
-            if (bodyParams.length) components.push({ type: "body", parameters: bodyParams });
-            if (buttonComponents.length) components.push(...buttonComponents);
-
-            console.log("[WA] Enviando plantilla:", {
-              name: env.WA_TEMPLATE_NAME,
-              lang: env.WA_TEMPLATE_LANG,
-              hasHeaderVideo: headerParams.length > 0,
-              bodyVars: bodyParams.length,
-              buttonParamSent: buttonComponents.length > 0,
-            });
-
-            await waSendTemplate(from, env.WA_TEMPLATE_NAME, env.WA_TEMPLATE_LANG, components);
-            console.log("[WA] Plantilla enviada OK");
-          } catch (err: any) {
-            const status = err?.response?.status;
-            const data = err?.response?.data;
-            console.error("[WA] template error:", status, data || err?.message);
-            console.error(
-              "[WA] Tips: Verificá name/lang EXACTO; header VIDEO con URL .mp4 pública; " +
-              "orden y cantidad de body vars; y si el botón URL tiene {{1}}, enviar el suffix en index 0."
-            );
+            components.push({ type: "body", parameters: bodyParams });
           }
-        } else {
-          console.log(`ℹ️ Tipo de mensaje no manejado (${type}).`);
+
+          // BOTÓN URL dinámico: solo si tu plantilla tiene {{1}} en el botón
+          const btnSuffix = env.WA_TEMPLATE_BTN_SUFFIX?.trim();
+          if (btnSuffix) {
+            components.push({
+              type: "button",
+              sub_type: "url",
+              index: "0",
+              parameters: [{ type: "text", text: btnSuffix }],
+            });
+          }
+
+          // Si no hay ningún componente, igual se puede enviar la plantilla estática
+          await waSendTemplate(
+            from,
+            env.WA_TEMPLATE_NAME,
+            env.WA_TEMPLATE_LANG,
+            components
+          );
+        } catch {
+          // si falla la plantilla no cortamos la respuesta del webhook
         }
       }
     }
 
-    // 2) Status (sent, delivered, read, failed, etc.)
-    const statuses = value?.statuses;
-    if (Array.isArray(statuses) && statuses.length > 0) {
-      for (const st of statuses) {
-        console.log("📦 Status entrante:", st);
-      }
-    }
+    // 3) Status entrantes (sent, delivered, read, failed). No hacemos nada activo.
+    // const statuses = value?.statuses; // opcional: registrar métricas si querés
 
-    // Siempre 200 para evitar reintentos
+    // Siempre 200 para que Meta no reintente
     res.sendStatus(200);
-  } catch (err) {
-    console.error("[WA] webhook error:", err);
-    res.sendStatus(500);
+  } catch {
+    res.sendStatus(200); // seguimos respondiendo 200 para evitar reintentos
   }
 }
